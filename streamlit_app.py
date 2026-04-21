@@ -336,6 +336,5 @@ if go:
 
 st.divider()
 st.caption(
-    "Large videos are auto-converted to compressed mono audio before upload, "
-    "and split into 10-minute chunks if they exceed the 25 MB Whisper limit."
+    "There's an upload limit of 2GB, contact Álvaro for larger files."
 )
