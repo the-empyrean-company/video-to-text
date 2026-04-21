@@ -132,7 +132,6 @@ def transcribe_file(client: OpenAI, audio_path: Path) -> str:
             file=f,
             response_format="text",
         )
-    # response_format="text" returns a plain string
     return str(resp).strip()
 
 

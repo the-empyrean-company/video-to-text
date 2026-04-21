@@ -1,7 +1,9 @@
-# Video → Text
+# 🎙️ Video → Text
 
-A tiny Streamlit app that turns a video file, audio file, or YouTube URL into a
-plain-text transcript using OpenAI's Whisper API.
+A tiny Streamlit app that turns a video file, audio file, or YouTube URL into
+a plain-text transcript using OpenAI's Whisper API.
+
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io)
 
 ## Use it
 
@@ -9,16 +11,26 @@ plain-text transcript using OpenAI's Whisper API.
 2. Click **Transcribe**.
 3. Read the transcript in the app, or download it as `.txt`.
 
-## Run locally
+## Run it on your own machine
 
-```bash
-pip install -r requirements.txt
-export OPENAI_API_KEY=sk-...
-streamlit run streamlit_app.py
-```
+1. Install the requirements
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-You also need `ffmpeg` installed on your machine (`brew install ffmpeg` on macOS,
-`sudo apt install ffmpeg` on Ubuntu).
+2. Make sure `ffmpeg` is installed
+   ```bash
+   # macOS
+   brew install ffmpeg
+   # Ubuntu/Debian
+   sudo apt install ffmpeg
+   ```
+
+3. Set your OpenAI key and run the app
+   ```bash
+   export OPENAI_API_KEY=sk-...
+   streamlit run streamlit_app.py
+   ```
 
 ## Deploy on Streamlit Community Cloud
 
@@ -26,12 +38,11 @@ You also need `ffmpeg` installed on your machine (`brew install ffmpeg` on macOS
 2. On [share.streamlit.io](https://share.streamlit.io), create a new app pointing
    at this repo and the `streamlit_app.py` file.
 3. Under **Settings → Secrets**, add:
-
    ```toml
    OPENAI_API_KEY = "sk-..."
    ```
 
-4. `packages.txt` tells Streamlit Cloud to install `ffmpeg` on the host.
+`packages.txt` tells Streamlit Cloud to install `ffmpeg` on the host.
 
 ## How it works
 
