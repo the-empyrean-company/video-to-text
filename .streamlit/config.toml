@@ -1,0 +1,4 @@
+[server]
+# Max upload size in MB. Default is 200.
+# Streamlit Cloud supports up to ~1 GB.
+maxUploadSize = 1024
