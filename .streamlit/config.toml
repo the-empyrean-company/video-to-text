@@ -1,3 +1,11 @@
 [server]
 # Max upload size in MB. Default is 200.
 maxUploadSize = 2048
+
+[theme]
+# Qargo brand palette (see Qargo styling guide)
+primaryColor = "#00E85B"       # Qargo Green
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F4F6F5"
+textColor = "#1C2C31"          # Qargo Navy
+font = "sans serif"

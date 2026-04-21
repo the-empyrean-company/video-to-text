@@ -1,8 +1,8 @@
 """
-Video / Audio / YouTube → Text transcription app.
+Video / Audio → Text transcription app.
 
-Simple Streamlit UI that takes an audio file, a video file, or a YouTube URL
-and returns a transcript using OpenAI's Whisper API.
+Simple Streamlit UI that takes an audio or video file and returns a transcript
+using OpenAI's Whisper API.
 
 Deploy to Streamlit Cloud:
   1. Push this repo to GitHub (entrypoint: streamlit_app.py).
@@ -20,23 +20,105 @@ import tempfile
 from pathlib import Path
 
 import streamlit as st
-from openai import OpenAI
+from openai import (
+    OpenAI,
+    APIConnectionError,
+    APIStatusError,
+    AuthenticationError,
+    RateLimitError,
+)
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
 st.set_page_config(
-    page_title="Video → Text",
+    page_title="Qargo Transcribe",
     page_icon="🎙️",
     layout="centered",
 )
+
+# Qargo brand colours (from Qargo styling guide).
+QARGO_GREEN = "#00E85B"
+QARGO_NAVY = "#1C2C31"
 
 # OpenAI Whisper API hard limit on uploaded file size.
 OPENAI_MAX_BYTES = 25 * 1024 * 1024  # 25 MB
 
 AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".mp4", ".mpeg", ".mpga", ".webm", ".ogg", ".flac"}
 VIDEO_EXTS = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".m4v", ".mpeg", ".mpg", ".wmv", ".flv"}
+
+
+# ---------------------------------------------------------------------------
+# Qargo styling
+# ---------------------------------------------------------------------------
+
+def inject_qargo_css() -> None:
+    """Apply Qargo brand styling on top of the Streamlit theme."""
+    st.markdown(
+        f"""
+        <style>
+            /* Headings in Qargo Navy */
+            h1, h2, h3, h4 {{
+                color: {QARGO_NAVY} !important;
+                font-weight: 600;
+            }}
+
+            /* Accent bar above the main title */
+            .qargo-accent {{
+                display: inline-block;
+                width: 56px;
+                height: 6px;
+                background: {QARGO_GREEN};
+                border-radius: 3px;
+                margin-bottom: 12px;
+            }}
+
+            /* Primary button: Qargo Green fill, Navy text */
+            .stButton > button[kind="primary"] {{
+                background-color: {QARGO_GREEN};
+                color: {QARGO_NAVY};
+                border: 0;
+                border-radius: 10px;
+                font-weight: 600;
+                padding: 0.6rem 1.2rem;
+                transition: filter 0.15s ease-in-out;
+            }}
+            .stButton > button[kind="primary"]:hover {{
+                filter: brightness(0.92);
+                color: {QARGO_NAVY};
+            }}
+            .stButton > button[kind="primary"]:disabled {{
+                background-color: #E5E7EA;
+                color: #9AA3A7;
+            }}
+
+            /* File uploader: soften borders, add Qargo accent */
+            [data-testid="stFileUploader"] section {{
+                border: 1.5px dashed rgba(28, 44, 49, 0.25);
+                border-radius: 12px;
+                background: #FAFBFC;
+            }}
+            [data-testid="stFileUploader"] section:hover {{
+                border-color: {QARGO_GREEN};
+            }}
+
+            /* Download button: outlined Navy */
+            .stDownloadButton > button {{
+                background: white;
+                color: {QARGO_NAVY};
+                border: 1.5px solid {QARGO_NAVY};
+                border-radius: 10px;
+                font-weight: 600;
+            }}
+            .stDownloadButton > button:hover {{
+                background: {QARGO_NAVY};
+                color: white;
+            }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -71,39 +153,6 @@ def extract_audio(input_path: Path, output_path: Path) -> None:
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg failed: {result.stderr[-500:]}")
-
-
-def download_youtube_audio(url: str, output_dir: Path) -> Path:
-    """Download audio from a YouTube URL using yt-dlp. Returns path to .mp3."""
-    try:
-        import yt_dlp  # noqa: F401
-    except ImportError as e:
-        raise RuntimeError("yt-dlp is not installed.") from e
-
-    from yt_dlp import YoutubeDL
-
-    output_template = str(output_dir / "yt_audio.%(ext)s")
-    ydl_opts = {
-        "format": "bestaudio/best",
-        "outtmpl": output_template,
-        "quiet": True,
-        "no_warnings": True,
-        "noprogress": True,
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "64",
-            }
-        ],
-    }
-    with YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
-
-    mp3_files = list(output_dir.glob("yt_audio*.mp3"))
-    if not mp3_files:
-        raise RuntimeError("yt-dlp did not produce an audio file.")
-    return mp3_files[0]
 
 
 def split_audio(input_path: Path, output_dir: Path, chunk_seconds: int = 600) -> list[Path]:
@@ -161,15 +210,30 @@ def safe_filename(name: str) -> str:
     return name or "transcript"
 
 
+def is_insufficient_quota(err: Exception) -> bool:
+    """Return True if the OpenAI error indicates credits are exhausted."""
+    code = getattr(err, "code", None)
+    if code == "insufficient_quota":
+        return True
+    # Fallback: inspect the body returned by the API.
+    body = getattr(err, "body", None)
+    if isinstance(body, dict):
+        inner = body.get("error") if isinstance(body.get("error"), dict) else body
+        if isinstance(inner, dict) and inner.get("code") == "insufficient_quota":
+            return True
+    msg = str(err).lower()
+    return "insufficient_quota" in msg or "exceeded your current quota" in msg
+
+
 # ---------------------------------------------------------------------------
 # UI
 # ---------------------------------------------------------------------------
 
-st.title("🎙️ Video → Text")
-st.caption(
-    "Upload a video or audio file, or paste a YouTube URL, and get a transcript. "
-    "Powered by OpenAI Whisper."
-)
+inject_qargo_css()
+
+st.markdown('<div class="qargo-accent"></div>', unsafe_allow_html=True)
+st.title("Qargo Transcribe")
+st.caption("Upload a video or audio file and get a plain-text transcript. Powered by OpenAI Whisper.")
 
 api_key = get_api_key()
 if not api_key:
@@ -186,17 +250,11 @@ if not ensure_ffmpeg():
         "On Streamlit Cloud, make sure `packages.txt` contains `ffmpeg`."
     )
 
-tab_upload, tab_url = st.tabs(["📁 Upload file", "🔗 YouTube URL"])
-
-with tab_upload:
-    uploaded = st.file_uploader(
-        "Drop an audio or video file here",
-        type=sorted({e.lstrip(".") for e in AUDIO_EXTS | VIDEO_EXTS}),
-        accept_multiple_files=False,
-    )
-
-with tab_url:
-    url = st.text_input("YouTube or other supported URL", placeholder="https://www.youtube.com/watch?v=…")
+uploaded = st.file_uploader(
+    "Drop an audio or video file here",
+    type=sorted({e.lstrip(".") for e in AUDIO_EXTS | VIDEO_EXTS}),
+    accept_multiple_files=False,
+)
 
 go = st.button("Transcribe", type="primary", use_container_width=True, disabled=not api_key)
 
@@ -205,26 +263,22 @@ if go:
         st.error("Please provide an OpenAI API key.")
         st.stop()
 
+    if uploaded is None:
+        st.error("Upload a file first.")
+        st.stop()
+
     client = OpenAI(api_key=api_key)
     progress = st.status("Starting…", expanded=True)
+    source_name = uploaded.name
+    transcript: str | None = None
 
     try:
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
 
-            # Resolve input → a local media file path
-            if uploaded is not None:
-                progress.write(f"Saving uploaded file `{uploaded.name}`…")
-                source_name = uploaded.name
-                src_path = workdir / safe_filename(uploaded.name)
-                src_path.write_bytes(uploaded.getbuffer())
-            elif url.strip():
-                progress.write("Downloading audio from URL…")
-                src_path = download_youtube_audio(url.strip(), workdir)
-                source_name = src_path.stem
-            else:
-                st.error("Upload a file or paste a URL first.")
-                st.stop()
+            progress.write(f"Saving uploaded file `{uploaded.name}`…")
+            src_path = workdir / safe_filename(uploaded.name)
+            src_path.write_bytes(uploaded.getbuffer())
 
             # Always normalize to a small mono 16kHz mp3 before sending to Whisper.
             progress.write("Extracting & compressing audio with ffmpeg…")
@@ -236,6 +290,37 @@ if go:
 
             progress.update(label="Done ✅", state="complete", expanded=False)
 
+    except RateLimitError as e:
+        progress.update(label="Stopped ❌", state="error", expanded=True)
+        if is_insufficient_quota(e):
+            st.error(
+                "💳 **Your OpenAI credits are exhausted.** "
+                "Add credits at https://platform.openai.com/account/billing to continue transcribing."
+            )
+        else:
+            st.error(
+                "⚠️ Hit a rate limit from OpenAI. Please wait a moment and try again."
+            )
+    except AuthenticationError:
+        progress.update(label="Stopped ❌", state="error", expanded=True)
+        st.error("🔑 The OpenAI API key was rejected. Check that the key is correct and active.")
+    except APIConnectionError:
+        progress.update(label="Stopped ❌", state="error", expanded=True)
+        st.error("🌐 Could not reach OpenAI. Check your connection and try again.")
+    except APIStatusError as e:
+        progress.update(label="Stopped ❌", state="error", expanded=True)
+        # Catch billing-related errors that come through as plain 4xx status errors too.
+        if is_insufficient_quota(e):
+            st.error(
+                "💳 **Your OpenAI credits are exhausted.** "
+                "Add credits at https://platform.openai.com/account/billing to continue transcribing."
+            )
+        else:
+            st.error(f"OpenAI returned an error: {e}")
+    except Exception as e:
+        progress.update(label="Failed ❌", state="error", expanded=True)
+        st.error(f"Something went wrong: {e}")
+    else:
         if not transcript:
             st.warning("Whisper returned an empty transcript.")
         else:
@@ -249,12 +334,8 @@ if go:
                 use_container_width=True,
             )
 
-    except Exception as e:
-        progress.update(label="Failed ❌", state="error", expanded=True)
-        st.error(f"Something went wrong: {e}")
-
 st.divider()
 st.caption(
-    "Tip: large videos are auto-converted to compressed mono audio before upload, "
+    "Large videos are auto-converted to compressed mono audio before upload, "
     "and split into 10-minute chunks if they exceed the 25 MB Whisper limit."
 )

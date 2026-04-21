@@ -1,13 +1,13 @@
-# 🎙️ Video → Text
+# 🎙️ Qargo Transcribe
 
-A tiny Streamlit app that turns a video file, audio file, or YouTube URL into
-a plain-text transcript using OpenAI's Whisper API.
+A tiny Streamlit app that turns a video or audio file into a plain-text
+transcript using OpenAI's Whisper API.
 
 [![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io)
 
 ## Use it
 
-1. Upload an audio/video file **or** paste a URL.
+1. Upload an audio or video file.
 2. Click **Transcribe**.
 3. Read the transcript in the app, or download it as `.txt`.
 
@@ -46,7 +46,7 @@ a plain-text transcript using OpenAI's Whisper API.
 
 ## How it works
 
-- Any input (video or YouTube) is normalized with `ffmpeg` to a mono 16 kHz MP3.
+- Any input (audio or video) is normalized with `ffmpeg` to a mono 16 kHz MP3.
 - If the resulting audio is under Whisper's 25 MB upload limit, it's sent as-is.
 - If it's larger, it's split into 10-minute chunks and transcribed sequentially,
   then the parts are concatenated.
