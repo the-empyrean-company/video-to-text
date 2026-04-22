@@ -1,5 +1,8 @@
 .streamlit/secrets.toml
 
+# macOS Finder metadata
+.DS_Store
+
 # Local media files (uploads, test clips, exported audio)
 *.mp3
 *.mp4
