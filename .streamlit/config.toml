@@ -1,6 +1,6 @@
 [server]
 # Max upload size in MB. Default is 200.
-maxUploadSize = 2048
+maxUploadSize = 5120
 
 [theme]
 # Qargo brand palette (see Qargo styling guide)

@@ -562,5 +562,5 @@ if st.session_state.transcript:
 
 st.divider()
 st.caption(
-    "There's an upload limit of 2GB, contact Álvaro for larger files."
+    "There's an upload limit of 5GB, contact Álvaro for larger files."
 )
