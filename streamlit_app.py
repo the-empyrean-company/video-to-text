@@ -45,6 +45,13 @@ QARGO_NAVY = "#1C2C31"
 # OpenAI Whisper API hard limit on uploaded file size.
 OPENAI_MAX_BYTES = 25 * 1024 * 1024  # 25 MB
 
+# Max size we accept through the browser uploader. Streamlit buffers the whole
+# upload in server RAM, so this must stay within the host's memory budget.
+# Keep this in sync with `maxUploadSize` in .streamlit/config.toml.
+MAX_UPLOAD_BYTES = 1024 * 1024 * 1024  # 1 GB
+MAX_UPLOAD_LABEL = "1 GB"
+CONTACT_NAME = "Álvaro"
+
 # Character-based chunk size for the GPT formatter. gpt-4o-mini has a 128k-token
 # context window but a ~16k-token *output* cap; at roughly 4 chars per token, a
 # 24k-char input chunk produces well under the output limit with headroom for
@@ -396,6 +403,17 @@ if go:
         st.error("Upload a file first.")
         st.stop()
 
+    # Guard against files too large for this host's memory. Streamlit buffers
+    # the whole upload in RAM, so anything past MAX_UPLOAD_BYTES risks an
+    # out-of-memory crash.
+    if uploaded.size > MAX_UPLOAD_BYTES:
+        st.error(
+            f"📦 **That file is {uploaded.size / 1_073_741_824:.2f} GB, which is over the "
+            f"{MAX_UPLOAD_LABEL} limit.** To transcribe something larger, contact {CONTACT_NAME} "
+            "and he can run it for you."
+        )
+        st.stop()
+
     client = OpenAI(api_key=api_key)
     progress = st.status("Starting…", expanded=True)
     source_name = uploaded.name
@@ -562,5 +580,6 @@ if st.session_state.transcript:
 
 st.divider()
 st.caption(
-    "There's an upload limit of 5GB, contact Álvaro for larger files."
+    f"There's an upload limit of {MAX_UPLOAD_LABEL}. To transcribe something larger, "
+    f"contact {CONTACT_NAME} and he can run it for you."
 )
